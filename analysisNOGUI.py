@@ -1,4 +1,6 @@
-
+#new
+import parameters_class
+#old
 import numpy as np
 import cv2
 from scipy.ndimage import label
@@ -28,62 +30,70 @@ class ImageAnalyzer(object):
 #     with open("/data2/test_images/for_training/all_trained_models/NeuralNet_deep.pickle", 'rb') as handle: ### neural netowork model (8,16,32,64,32,16,8)
 #         model1 = pickle.load(handle)
     #edited
-    def __init__(self, input_params):
+    def __init__(self, is_gui, input_params=None, analysisgui=None, inout_resource_gui=None):
         #all from the input excel file->dict
-        self.input_params = input_params
-        self.spot_params_dict =self.INITIALIZE_SPOT_ANALYSIS_PARAMS()
+        if is_gui == False:
+            self.input_params = input_params
+            self.gui_params = parameters_class.Gui_Params(is_gui,input_params = input_params)
+            self.spot_params_dict =self.INITIALIZE_SPOT_ANALYSIS_PARAMS()
+        else:
+            self.AnalysisGui = analysisgui
+            self.inout_resource_gui = inout_resource_gui
+            self.gui_params = parameters_class.Gui_Params(is_gui,analysisgui=analysisgui, inout_resource_gui=inout_resource_gui)
+            self.spot_params_dict =self.INITIALIZE_SPOT_ANALYSIS_PARAMS()
+        
     
     #edited
     def nuclei_segmenter(self, input_img, pixpermic=None):
         
         #self.AnalysisGui.nuclei_detection_method.currentText()444
-        if self.input_params["nuclei_detection_method"] == "Int.-based":
+        if self.gui_params.NucDetectMethod == "Int.-based":
             
-            first_thresh = self.input_params["nuclei_separation"]*2.55 #separationslider
-            second_thresh = 255-(self.input_params["nuclei_detection"]*2.55) #detectionslider
-            Cell_Size = self.input_params["nuclei_area"]
+            first_thresh = self.gui_params.NucSeparationSlider*2.55 #separationslider
+            second_thresh = 255-(self.gui_params.NucDetectionSlider*2.55) #detectionslider
+            Cell_Size = self.gui_params.NucleiAreaSlider
             
             boundary, mask = self.segmenter_function(input_img, cell_size=Cell_Size, 
                                                      first_threshold=first_thresh, second_threshold=second_thresh)
             
-        if self.input_params["nuclei_detection_method"] == "Marker Controlled":
+        if self.gui_params.NucDetectMethod == "Marker Controlled":
             pixpermic=1
           
-            Cell_Size = self.input_params["nuclei_area"]
+            Cell_Size = self.gui_params.NucleiAreaSlider
             max_range = np.sqrt(Cell_Size/3.14)*2/float(pixpermic)
-            nuc_detect_sldr = self.input_params["nuclei_detection"]
+            nuc_detect_sldr = self.gui_params.NucDetectionSlider
             first_thresh = np.ceil((1-(nuc_detect_sldr/100))*max_range).astype(int)
             
-            second_thresh = self.input_params["nuclei_separation"]
+            second_thresh = self.gui_params.NucSeparationSlider
             
             print(Cell_Size, first_thresh, second_thresh)
             boundary, mask = self.watershed_scikit(input_img, cell_size=Cell_Size, 
                                                      first_threshold=first_thresh, second_threshold=second_thresh)
 
-        if self.input_params["nuclei_detection_method"] == "CellPose-GPU":
+        if self.gui_params.NucDetectMethod == "CellPose-GPU":
             pixpermic = 0.1 #commented out earlier, why?
-            Cell_Size = self.input_params["nuclei_area"]
+            Cell_Size = self.gui_params.NucleiAreaSlider
             cell_diameter = np.sqrt(Cell_Size/(float(pixpermic)*float(pixpermic)))*2/3.14
             
             boundary, mask = self.cellpose_segmenter(input_img, use_GPU=1, cell_dia=cell_diameter)
             
-        if self.input_params["nuclei_detection_method"] == "CellPose-CPU":
+        if self.gui_params.NucDetectMethod == "CellPose-CPU":
             
-            Cell_Size = self.input_params["nuclei_area"]
+            Cell_Size = self.gui_params.NucleiAreaSlider
             cell_diameter = np.sqrt(Cell_Size/(float(pixpermic)*float(pixpermic)))*2/3.14
             
             boundary, mask = self.cellpose_segmenter(input_img, use_GPU=0, cell_dia=cell_diameter)
             
-        if self.input_params["nuclei_detection_method"] == "CellPose-Cyto":
+        if self.gui_params.NucDetectMethod == "CellPose-Cyto":
             
-            Cell_Size = self.input_params["nuclei_area"]
+            Cell_Size = self.gui_params.NucleiAreaSlider
             cell_diameter = np.sqrt(Cell_Size/(float(pixpermic)*float(pixpermic)))*2/3.14
             
             boundary, mask = self.cellpose_segmenter(input_img, use_GPU=1, cell_dia=cell_diameter)
                 
-        if self.input_params["nuclei_detection_method"] == "DeepCell":
+        if self.gui_params.NucDetectMethod == "DeepCell":
             
-            Cell_Size = self.input_params["nuclei_area"]
+            Cell_Size = self.gui_params.NucleiAreaSlider
             cell_diameter = Cell_Size/100
             
             boundary, mask = self.deepcell_segmenter(input_img, cell_dia=cell_diameter)
@@ -116,12 +126,12 @@ class ImageAnalyzer(object):
 #edited
     def cellpose_segmenter(self, input_img, use_GPU, cell_dia=None):
         
-        if self.input_params["remove_boundary_nuclei"] == True: #remove boundary
+        if self.gui_params.NucRemoveBoundaryCheckBox == True: #remove boundary
             img_uint8 = input_img
         else:
             img_uint8 = cv2.copyMakeBorder(input_img,5,5,5,5,cv2.BORDER_CONSTANT,value=0)
 
-        if self.input_params["nuclei_detection_method"] == "CellPose-Cyto":
+        if self.gui_params.NucDetectMethod == "CellPose-Cyto":
             model = models.Cellpose(gpu=use_GPU, model_type='cyto')
         else:
             model = models.Cellpose(gpu=use_GPU, model_type='nuclei')
@@ -129,7 +139,7 @@ class ImageAnalyzer(object):
                 
         boundary = find_boundaries(masks, connectivity=1, mode='thick', background=0)
 
-        if self.input_params["remove_boundary_nuclei"] == True:
+        if self.gui_params.NucRemoveBoundaryCheckBox == True:
 
             boundary_img = (255*boundary).astype('uint8')
             filled1 = ndimage.binary_fill_holes(boundary_img)
@@ -295,8 +305,8 @@ class ImageAnalyzer(object):
         
         return max_project
 #tentatively done
-    def SpotDetector(self, input_image_raw, input_params, nuclei_image, spot_channel):
-        if input_params["spot_channel_select"]=='All':
+    def SpotDetector(self, input_image_raw, nuclei_image, spot_channel):
+        if self.gui_params.NucRemoveBoundaryCheckBox=='All':
             
             params_to_pass= self.spot_params_dict['Ch1']
         else:
@@ -336,15 +346,15 @@ class ImageAnalyzer(object):
                 
                 input_image1[labeled_nuc==row['label']]=0
         input_image1[input_image1>max_intensity_max]=0 
-        if input_params["spots_per_channel"]>1:
-            input_image1 = rescale(input_image1.copy(), input_params["ch1_spots/ch"], anti_aliasing=False, preserve_range=True)
+        if self.gui_params.SpotPerChSpinBox>1:
+            input_image1 = rescale(input_image1.copy(), self.gui_params.SpotPerChSpinBox, anti_aliasing=False, preserve_range=True)
 
         input_image1 = cv2.normalize(input_image1, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)    
 ########################################
         sig=int(params_to_pass[3])
         if str(params_to_pass[0]) == "LOG":
             log_result = ndimage.gaussian_laplace(input_image1, sigma=sig)
-            if input_params["spots_per_channel"]>1:
+            if self.gui_params.SpotPerChSpinBox>1:
                 log_result =  resize(log_result, input_image_raw.shape, anti_aliasing=False, preserve_range=True)
 
             if str(params_to_pass[1]) == "Auto":
@@ -352,7 +362,7 @@ class ImageAnalyzer(object):
                 ret_log, thresh_log = cv2.threshold(log_result.astype("uint8"),0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
                 bin_img_log = (1-thresh_log/255).astype('bool')
                 
-                if input_params["spots_per_channel"]>1:
+                if self.gui_params.SpotPerChSpinBox>1:
                     struct = ndimage.generate_binary_structure(2, 2)
                     bin_img_log = ndimage.binary_dilation(bin_img_log, structure=struct).astype(filled.dtype)
 
@@ -361,7 +371,7 @@ class ImageAnalyzer(object):
                 manual_threshold = np.ceil(params_to_pass[2]*2.55).astype(int)
                 thresh_log = log_result.astype("uint8") > manual_threshold
                 bin_img_log = thresh_log
-                if input_params["spots_per_channel"]>1:
+                if self.gui_params.SpotPerChSpinBox>1:
                     struct = ndimage.generate_binary_structure(2, 2)
                     bin_img_log = ndimage.binary_dilation(bin_img_log, structure=struct).astype(filled.dtype)
             
@@ -416,7 +426,7 @@ class ImageAnalyzer(object):
             spot_openned_g = cv2.morphologyEx(spots_img_g, cv2.MORPH_OPEN, kernel)
             final_spots = np.multiply(spot_openned_g,filled)
         ### center of mass calculation
-        if str(input_params["spot_coordinates"]) == 'CenterOfMass':
+        if str(self.gui_params.SpotLocationCbox_currentText) == 'CenterOfMass':
             
 #             labeled_spots, num_features = label(final_spots)
 #             spot_labels = np.unique(labeled_spots)
@@ -428,7 +438,7 @@ class ImageAnalyzer(object):
 #             spot_locations = ndimage.measurements.center_of_mass(masked_spots, labeled_spots, spot_labels[spot_labels>0])
             spot_locations = list(spots_df['center_of_mass_coords'].to_numpy())
             ###### Brightest spot calculation
-        if str(input_params["spot_coordinates"]) == "MaxIntensity":
+        if str(self.gui_params.SpotLocationCbox_currentText) == "MaxIntensity":
             
 #             labeled_spots, num_features = label(final_spots)
 #             spot_labels = np.unique(labeled_spots)
@@ -437,7 +447,7 @@ class ImageAnalyzer(object):
 #             spot_locations = peak_local_max(masked_spots, labels=labeled_spots, num_peaks_per_label=1)
             spot_locations = list(spots_df['max_intensity_coords'].to_numpy())
             ##### Centroid calculation
-        if str(input_params["spot_coordinates"]) == "Centroid":
+        if str(self.gui_params.SpotLocationCbox_currentText) == "Centroid":
             
             labeled_spots, num_features = label(final_spots)
             spot_labels = np.unique(labeled_spots)
@@ -536,32 +546,120 @@ class ImageAnalyzer(object):
     
     #EDITED
     def INITIALIZE_SPOT_ANALYSIS_PARAMS(self):
-        #change so that it initializes from the input file, ask for an input file path?
-        #spotanalysismethod =  detection method = nuclei channel? [0]
-        #thresholdmethod is as read [1]
-        #thresholdslider=threshold value (goes from 0 to 100) [2]
-        #sensitivityspinbox = kernel size? (goes from 1 to 9) [3]
-        #spotsperchspinbox = spots/channel [4]
 
         self.spot_params_dict={
             
-            "Ch1": np.array([self.input_params["ch1_spot_detection_method"],self.input_params["ch1_spot_threshold_method"],
-                    self.input_params["ch1_spot_threshold_value"], self.input_params["ch1_kernel_size"],
-                            self.input_params["ch1_spots/ch"]]),
-            "Ch2": np.array([self.input_params["ch2_spot_detection_method"],self.input_params["ch2_spot_threshold_method"],
-                    self.input_params["ch2_spot_threshold_value"], self.input_params["ch2_kernel_size"],
-                            self.input_params["ch2_spots/ch"]]),
-            "Ch3": np.array([self.input_params["ch3_spot_detection_method"],self.input_params["ch3_spot_threshold_method"],
-                    self.input_params["ch3_spot_threshold_value"], self.input_params["ch3_kernel_size"],
-                            self.input_params["ch3_spots/ch"]]),
-            "Ch4": np.array([self.input_params["ch4_spot_detection_method"],self.input_params["ch4_spot_threshold_method"],
-                    self.input_params["ch4_spot_threshold_value"], self.input_params["ch4_kernel_size"],
-                            self.input_params["ch4_spots/ch"]]),
-            "Ch5": np.array([self.input_params["ch5_spot_detection_method"],self.input_params["ch5_spot_threshold_method"],
-                    self.input_params["ch5_spot_threshold_value"], self.input_params["ch5_kernel_size"],
-                            self.input_params["ch5_spots/ch"]])
+            "Ch1": np.array([self.gui_params.spotanalysismethod,self.gui_params.thresholdmethod,
+                    self.gui_params.ThresholdSlider, self.gui_params.SensitivitySpinBox,
+                            self.gui_params.SpotsPerChSpinBox]),
+            "Ch2": np.array([self.gui_params.spotanalysismethod,self.gui_params.thresholdmethod,
+                    self.gui_params.ThresholdSlider, self.gui_params.SensitivitySpinBox,
+                            self.gui_params.SpotsPerChSpinBox]),
+            "Ch3": np.array([self.gui_params.spotanalysismethod,self.gui_params.thresholdmethod,
+                    self.gui_params.ThresholdSlider, self.gui_params.SensitivitySpinBox,
+                            self.gui_params.SpotsPerChSpinBox]),
+            "Ch4": np.array([self.gui_params.spotanalysismethod,self.gui_params.thresholdmethod,
+                    self.gui_params.ThresholdSlider, self.gui_params.SensitivitySpinBox,
+                            self.gui_params.SpotsPerChSpinBox]),
+            "Ch5": np.array([self.gui_params.spotanalysismethod,self.gui_params.thresholdmethod,
+                    self.gui_params.ThresholdSlider, self.gui_params.SensitivitySpinBox,
+                            self.gui_params.SpotsPerChSpinBox])
             }
         return self.spot_params_dict
     
+    def UPDATE_SPOT_ANALYSIS_PARAMS(self):
+        
+        if self.AnalysisGui.spotchannelselect.currentText()=='All':
+            
+            self.spot_params_dict={
+            
+            "Ch1": np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int),
+            "Ch2": np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int),
+            "Ch3": np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int),
+            "Ch4": np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int),
+            "Ch5": np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int)
+            }
+        
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch1':
+            
+            self.spot_params_dict["Ch1"] =    np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int)
+            
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch2':
+            
+            self.spot_params_dict["Ch2"] =    np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int)
+        
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch3':
+            
+            self.spot_params_dict["Ch3"] =    np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int)
+            
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch4':
+            
+            self.spot_params_dict["Ch4"] =    np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int)
+            
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch5':
+            
+            self.spot_params_dict["Ch5"] =    np.array([self.AnalysisGui.spotanalysismethod.currentIndex(),self.AnalysisGui.thresholdmethod.currentIndex(),
+                    self.AnalysisGui.ThresholdSlider.value(), self.AnalysisGui.SensitivitySpinBox.value(),
+                            self.AnalysisGui.SpotPerChSpinBox.value()],dtype=int)
     
+    def UPDATE_SPOT_ANALYSIS_GUI_PARAMS(self):
+        
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch1':
+            
+            self.AnalysisGui.spotanalysismethod.setCurrentIndex(np.array(self.spot_params_dict["Ch1"][0]).astype(int))
+            self.AnalysisGui.thresholdmethod.setCurrentIndex(np.array(self.spot_params_dict["Ch1"][1]).astype(int))
+            self.AnalysisGui.ThresholdSlider.setValue(np.array(self.spot_params_dict["Ch1"][2]).astype(int))
+            self.AnalysisGui.SensitivitySpinBox.setValue(np.array(self.spot_params_dict["Ch1"][3]).astype(int))
+            self.AnalysisGui.SpotPerChSpinBox.setValue(np.array(self.spot_params_dict["Ch1"][4]).astype(int))
+        
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch2':
+            
+            self.AnalysisGui.spotanalysismethod.setCurrentIndex(np.array(self.spot_params_dict["Ch2"][0]).astype(int))
+            self.AnalysisGui.thresholdmethod.setCurrentIndex(np.array(self.spot_params_dict["Ch2"][1]).astype(int))
+            self.AnalysisGui.ThresholdSlider.setValue(np.array(self.spot_params_dict["Ch2"][2]).astype(int))
+            self.AnalysisGui.SensitivitySpinBox.setValue(np.array(self.spot_params_dict["Ch2"][3]).astype(int))
+            self.AnalysisGui.SpotPerChSpinBox.setValue(np.array(self.spot_params_dict["Ch2"][4]).astype(int))
+        
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch3':
+            
+            self.AnalysisGui.spotanalysismethod.setCurrentIndex(np.array(self.spot_params_dict["Ch3"][0]).astype(int))
+            self.AnalysisGui.thresholdmethod.setCurrentIndex(np.array(self.spot_params_dict["Ch3"][1]).astype(int))
+            self.AnalysisGui.ThresholdSlider.setValue(np.array(self.spot_params_dict["Ch3"][2]).astype(int))
+            self.AnalysisGui.SensitivitySpinBox.setValue(np.array(self.spot_params_dict["Ch3"][3]).astype(int))
+            self.AnalysisGui.SpotPerChSpinBox.setValue(np.array(self.spot_params_dict["Ch3"][4]).astype(int))
+        
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch4':
+            
+            self.AnalysisGui.spotanalysismethod.setCurrentIndex(np.array(self.spot_params_dict["Ch4"][0]).astype(int))
+            self.AnalysisGui.thresholdmethod.setCurrentIndex(np.array(self.spot_params_dict["Ch4"][1]).astype(int))
+            self.AnalysisGui.ThresholdSlider.setValue(np.array(self.spot_params_dict["Ch4"][2]).astype(int))
+            self.AnalysisGui.SensitivitySpinBox.setValue(np.array(self.spot_params_dict["Ch4"][3]).astype(int))
+            self.AnalysisGui.SpotPerChSpinBox.setValue(np.array(self.spot_params_dict["Ch4"][4]).astype(int))
+        
+        if self.AnalysisGui.spotchannelselect.currentText()=='Ch5':
+            
+            self.AnalysisGui.spotanalysismethod.setCurrentIndex(np.array(self.spot_params_dict["Ch5"][0]).astype(int))
+            self.AnalysisGui.thresholdmethod.setCurrentIndex(np.array(self.spot_params_dict["Ch5"][1]).astype(int))
+            self.AnalysisGui.ThresholdSlider.setValue(np.array(self.spot_params_dict["Ch5"][2]).astype(int))
+            self.AnalysisGui.SensitivitySpinBox.setValue(np.array(self.spot_params_dict["Ch5"][3]).astype(int))
+            self.AnalysisGui.SpotPerChSpinBox.setValue(np.array(self.spot_params_dict["Ch5"][4]).astype(int))
+        
         
