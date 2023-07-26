@@ -59,8 +59,8 @@ class ControlPanel(QWidget):
         self.inputoutputcontrol = InputOutput.inputoutput_control()
         
 #         self.gridLayout_centralwidget.addWidget(self.inout_resource_gui, 1, 1, 4, 10)
-        
-        self.image_analyzer = Analysis.ImageAnalyzer(self.analysisgui, self.inout_resource_gui)
+        #CHANGED
+        self.image_analyzer = analysisNOGUI.ImageAnalyzer(is_gui,analysisgui=self.analysisgui, inout_resource_gui=self.inout_resource_gui)
         #self.ImDisplay = Display.imagedisplayer(self.analysisgui,self.centralwidget)
         self.ImDisplay = Display_Copy1.imagedisplayer(self.analysisgui,self.centralwidget, self.analysisgui)
         self.PlateGrid = GridLayout.gridgenerator(self.centralwidget, self.gridLayout_centralwidget)
@@ -170,7 +170,8 @@ class ControlPanel(QWidget):
         
         
         ####### Analysis Gui Controllers
-        self.batchanalysis = BatchAnalyzer.BatchAnalysis(self.analysisgui, self.image_analyzer, self.inout_resource_gui, self.displaygui, self.ImDisplay)
+        #CHANGED
+        self.batchanalysis = BatchAnalyzerNOGUI.BatchAnalysis(is_gui, analysisgui = self.analysisgui, image_analyzer = self.image_analyzer, inout_resource_gui = self.inout_resource_gui, displaygui = self.displaygui, ImDisplay = self.ImDisplay)
         #self.analysisgui.NucMaxZprojectCheckBox.stateChanged.connect(lambda: self.ImDisplay.GET_IMAGE_NAME(self.displaygui))
         self.analysisgui.NucRemoveBoundaryCheckBox.stateChanged.connect(lambda: self.ImDisplay.GET_IMAGE_NAME(self.displaygui))
         
@@ -550,9 +551,61 @@ def is_gui(gui_or_no):
         # print(nuc_bndry,nuc_mask) 
         # print("done")
     else:
-        gui_or_no = ("Please input either y or n:")
+        gui_or_no = input("Please input either y or n:")
         is_gui(gui_or_no)
 if __name__ == "__main__":
-    gui_or_no = input("Would you like to use the GUI? (y/n)")
-    is_gui(gui_or_no)
-
+    # gui_or_no = input("Would you like to use the GUI? (y/n)")
+    # is_gui(gui_or_no)
+    if len(sys.argv) == 1:
+        is_gui = True
+        currentExitCode = ControlPanel.EXIT_CODE_REBOOT
+        while currentExitCode == ControlPanel.EXIT_CODE_REBOOT:
+            app = QtWidgets.QApplication(sys.argv)
+            MainWindow = QtWidgets.QMainWindow()
+            cp = ControlPanel()
+            cp.controlUi(MainWindow)
+            MainWindow.show()
+            currentExitCode = app.exec_()
+            app = None
+            # sys.exit(app.exec_())
+    elif len(sys.argv) == 2:
+        is_gui = False
+        #metadata_path = "/data/tranne/AssayPlate_PerkinElmer_CellCarrier-384"#input("Input path to metadata file:")
+        #data_path = "/data/tranne/hitips-nicole"#input("Input path to input file:")
+        #filename = "input_template.xlsx"#input("Input parameter file name:")
+        #save path is in batchanalyzer- probably make a way to change the paths and the file names, etc
+        #filepath = os.path.join(data_path,filename)
+        input_params = pd.read_excel(sys.argv[1])
+        names = input_params['Name'].tolist()
+        values = input_params['Value'].tolist()
+        names1 = input_params['Name1'].tolist()
+        values1 = input_params['Value1'].tolist()
+        #make a dictionary of all the things for better readability of code
+        input_params = {names[i]: values[i] for i in range(len(names))}
+        input_params1 = {names1[i]: values1[i] for i in range(len(names1))}
+        input_params.update(input_params1)
+        print(input_params)
+        #something to read the metadata
+        dh=CellTrack_utils.data_handler()
+        out_df = dh.return_metadata_df(input_params["metadata_path"]) 
+        #something to run the batch analysis
+        image_analyzer = analysisNOGUI.ImageAnalyzer(is_gui,input_params=input_params)
+        batchanalysis = BatchAnalyzerNOGUI.BatchAnalysis(is_gui, input_params = input_params, image_analyzer=image_analyzer)
+        batchanalysis.ON_APPLYBUTTON(out_df)
+        #testing with just nuc segmentor
+        # nuc=analysisNOGUI.ImageAnalyzer(input_params)
+        # img = Image.open('sample.tif')
+        # img_arr = np.array(img)
+        # print(img_arr)
+        # ImageForNucMask = img_arr
+        # normalized_nuc_img = cv2.normalize(ImageForNucMask, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        # print(normalized_nuc_img)
+        # nuc_bndry, nuc_mask = nuc.nuclei_segmenter(input_img=normalized_nuc_img)
+        # print("boundary and stuff")
+        # img = Image.fromarray(nuc_bndry)
+        # img.save("boundary.tif")
+        # print(nuc_bndry,nuc_mask) 
+        # print("done")
+    else:
+        print("Please input something correct B)")
+        exit
