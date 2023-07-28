@@ -77,6 +77,8 @@ class BatchAnalysis(object):
             self.gui_params = parameters_class.Gui_Params(is_gui, input_params=input_params)
             self.ImageAnalyzer = image_analyzer
             self.counter = SafeCounter()
+            self.distance_counter = SafeCounter()
+            
         else:
             self.inout_resource_gui = inout_resource_gui
             self.AnalysisGui = analysisgui
@@ -100,9 +102,11 @@ class BatchAnalysis(object):
         #set output directory
         if self.is_gui == False:
             self.output_dir = self.gui_params.output_dir
+            if os.path.isdir(self.output_dir) == False:
+                os.mkdir(self.output_dir) 
             self.Meta_Data_df = Meta_Data_df
             path_list = os.path.split(self.Meta_Data_df["ImageName"][0])[0].split(r'/')
-            self.experiment_name = path_list[path_list.__len__()-2]
+            self.experiment_name = path_list[path_list.__len__()-1]
             self.output_prefix  = path_list[path_list.__len__()-1]
             self.output_folder = os.path.join(self.output_dir,self.experiment_name)
 
@@ -299,10 +303,12 @@ class BatchAnalysis(object):
         
         
         if self.gui_params.SpotsDistance_check_status == True:
+            print("Starting Spot Distance calculation")
             columns = np.unique(np.asarray(self.cell_df['column'], dtype=int))
             rows = np.unique(np.asarray(self.cell_df['row'], dtype=int))
+            self.distances = len(rows)*len(columns)
             Parallel(n_jobs=jobs_number, prefer="threads")(delayed(self.Calculate_Spot_Distances)(row, col) for row in rows for col in columns)
-        
+            print("Completed Spot Distance Tracking")
         if self.gui_params.Cell_Tracking_check_status == True:
             
             cell_tracking_folder = os.path.join(self.output_folder, 'cell_tracking')
@@ -395,10 +401,11 @@ class BatchAnalysis(object):
                             
                         #### run nuclei tracking algorithm based the selected method
                         if self.gui_params.NucTrackingMethod_currentText == "Bayesian":
+                            print("Starting Bayesian cell tracking")
                             tracks_pd = self.RUN_BTRACK(label_stack, self.gui_params)
                         
                         if self.gui_params.NucTrackingMethod_currentText == "DeepCell":
-                        
+                            print("Starting Deepcell cell tracking")
                             tracks_pd = self.deepcell_tracking(t_stack_nuc,label_stack,self.gui_params)
                         
                         ##########save whole field track images
@@ -878,7 +885,6 @@ class BatchAnalysis(object):
         if self.df_checker.empty == False:
         
             loadedimg_formask = self.IMG_FOR_NUC_MASK()
-
             if loadedimg_formask.ndim ==2:
                 
                 ImageForNucMask = cv2.normalize(loadedimg_formask, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
@@ -1204,7 +1210,12 @@ class BatchAnalysis(object):
     #prevuious comment out
 
     def Calculate_Spot_Distances(self, row, col):
-    
+        self.distance_counter.increment()    
+        #print(self.counter.value())        
+        progress_message = "Progress: %d%% [%d / %d] files" % (self.distance_counter.value() / self.distances * 100, self.distance_counter.value(), self.distances)
+        # Don't use print() as it will print in new line every time.
+        sys.stdout.write("\r" + progress_message)
+        sys.stdout.flush()
         select_cell = self.cell_df.loc[(self.cell_df['column'] == col) & (self.cell_df['row'] == row)]    
 
         spot_pd_dict = {}
@@ -1250,7 +1261,7 @@ class BatchAnalysis(object):
                 else:
                     ch_distance = key1 + r'_' + key2
                     ch_distances.append(ch_distance)
-
+                    
                     dist_pd = self.DISTANCE_calculator(spot_pd_dict,key1,key2,select_cell, row, col)
                     well_spot_dist_folder = os.path.join(self.output_folder, 'well_spots_distances')
                     if os.path.isdir(well_spot_dist_folder) == False:
@@ -1259,7 +1270,7 @@ class BatchAnalysis(object):
                     spot_dist_filename = 'SpotDistances_' + key1 +'_' +key2 +'_' + WELL_PLATE_ROWS[row-1] + str(col) + r'.csv'
                     spot_dist_well_csv_full_name = os.path.join(well_spot_dist_folder, spot_dist_filename)
                     dist_pd.to_csv(path_or_buf=spot_dist_well_csv_full_name, encoding='utf8')
-                    print(spot_dist_filename)
+                    #print(spot_dist_filename)
 
     def DISTANCE_calculator(self, spot_pd_dict, key1, key2,select_cell, row, col):
     
@@ -1272,7 +1283,7 @@ class BatchAnalysis(object):
             for t in time_points:
                 for a in actionindices:
                     for z in z_slices:
-
+                        
                         # cells_in_field = select_cell.loc[ 
                         #                       (select_cell['time_point'] == t) & 
                         #                       (select_cell['field_index'] == f)& 
@@ -1328,7 +1339,6 @@ class BatchAnalysis(object):
         if self.df_checker.empty == False:
 
             if self.gui_params.NucMaxZprojectCheckBox_status_check == True:
-
                 maskchannel = self.gui_params.NucleiChannel_index
                 imgformask = self.df_checker.loc[(self.df_checker['channel'] == maskchannel)]
                 loadedimg_formask = self.ImageAnalyzer.max_z_project(imgformask)
@@ -1550,6 +1560,7 @@ class BatchAnalysis(object):
         tracks_pd = pd.DataFrame()
         for i in range(len(tracks)):
             tracks_pd = tracks_pd.append(pd.DataFrame(tracks[i].to_dict()))
+        print(tracks_pd)
         tracks_pd = tracks_pd[tracks_pd['dummy']==False]
         return tracks_pd
     
