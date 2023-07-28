@@ -1,5 +1,8 @@
 #new
 import parameters_class
+# f = open("parameters_class.py", mode="r")
+# print(f.readlines())
+# f.close()
 #old
 import numpy as np
 import cv2
@@ -381,7 +384,7 @@ class ImageAnalyzer(object):
             final_spots = np.multiply(spot_openned_log,filled)
             spots_df, bin_img_log, labeled_spots = self.spots_information(final_spots, input_image_raw)   
             
-        if str(params_to_pass[0]) == "Gaussian":
+        if str(params_to_pass[0]) == "Laplacian of Gaussian":
             
             result_gaussian = ndimage.gaussian_filter(input_image1, sigma=sig)
             
@@ -396,16 +399,13 @@ class ImageAnalyzer(object):
                 
                 thresh_log = result_gaussian > manual_threshold
                 bin_img_g = thresh_log
-
+#CHANGED
+            spots_img_g = ((bin_img_g>0)*255).astype('uint8') 
             kernel = np.ones((3,3), np.uint8)
             spot_openned_g = cv2.morphologyEx(spots_img_g, cv2.MORPH_OPEN, kernel)
             final_spots = np.multiply(spot_openned_g,filled)
             spots_df, bin_img_g, labeled_spots = self.spots_information(final_spots, input_image_raw)
 #             final_spots = ((bin_img_g>0)*255).astype('uint8') 
-            spots_img_g = ((bin_img_g>0)*255).astype('uint8') 
-            kernel = np.ones((3,3), np.uint8)
-            spot_openned_g = cv2.morphologyEx(spots_img_g, cv2.MORPH_OPEN, kernel)
-            final_spots = np.multiply(spot_openned_g,filled)
         
         if str(params_to_pass[0]) == "IntensityThreshold":
             
