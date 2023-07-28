@@ -575,15 +575,34 @@ if __name__ == "__main__":
         #filename = "input_template.xlsx"#input("Input parameter file name:")
         #save path is in batchanalyzer- probably make a way to change the paths and the file names, etc
         #filepath = os.path.join(data_path,filename)
-        input_params = pd.read_excel(sys.argv[1])
-        names = input_params['Name'].tolist()
+        # input_params = pd.read_excel(sys.argv[1])
+        # names = input_params['Name'].tolist()
+        # values = input_params['Value'].tolist()
+        # names1 = input_params['Name1'].tolist()
+        # values1 = input_params['Value1'].tolist()
+        # #make a dictionary of all the things for better readability of code
+        # input_params = {names[i]: values[i] for i in range(len(names))}
+        # input_params1 = {names1[i]: values1[i] for i in range(len(names1))}
+        # #check for ints that were read as strings
+        # for possible_num in input_params1:
+        #     if np.isnan(possible_num):
+        #         del input_params1[possible_num]
+        #     if np.isnan(input_params1[possible_num]):
+        #         del input_params1[possible_num]
+        #     if input_params1[possible_num].isnumeric():
+        #         input_params1[possible_num] = int(input_params1[possible_num])
+        # input_params.update(input_params1)
+        input_params = pd.read_csv(sys.argv[1],keep_default_na=False)
         values = input_params['Value'].tolist()
-        names1 = input_params['Name1'].tolist()
-        values1 = input_params['Value1'].tolist()
-        #make a dictionary of all the things for better readability of code
+        names = input_params['Name'].tolist()
+        for i in range(len(values)):
+            if values[i].isnumeric():
+                values[i] = int(values[i])
+            elif values[i] == "TRUE" or values[i] =="True":
+                values[i] = True
+            elif values[i] == "FALSE" or values[i]=="False":
+                values[i] = False
         input_params = {names[i]: values[i] for i in range(len(names))}
-        input_params1 = {names1[i]: values1[i] for i in range(len(names1))}
-        input_params.update(input_params1)
         print(input_params)
         #something to read the metadata
         dh=CellTrack_utils.data_handler()
