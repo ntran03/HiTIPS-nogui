@@ -501,58 +501,7 @@ class ControlPanel(QWidget):
 
         QtWidgets.qApp.exit( ControlPanel.EXIT_CODE_REBOOT )
         
-def is_gui(gui_or_no):
-    if gui_or_no == "y":
-        currentExitCode = ControlPanel.EXIT_CODE_REBOOT
-        while currentExitCode == ControlPanel.EXIT_CODE_REBOOT:
-            app = QtWidgets.QApplication(sys.argv)
-            MainWindow = QtWidgets.QMainWindow()
-            cp = ControlPanel()
-            cp.controlUi(MainWindow)
-            MainWindow.show()
-            currentExitCode = app.exec_()
-            app = None
-            # sys.exit(app.exec_())
-    elif gui_or_no == "n":
-        metadata_path = "/data/tranne/AssayPlate_PerkinElmer_CellCarrier-384"#input("Input path to metadata file:")
-        data_path = "/data/tranne/hitips-nicole"#input("Input path to input file:")
-        filename = "input_template.xlsx"#input("Input parameter file name:")
-        #save path is in batchanalyzer- probably make a way to change the paths and the file names, etc
-        filepath = os.path.join(data_path,filename)
-        input_params = pd.read_excel(filepath)
-        names = input_params['Name'].tolist()
-        values = input_params['Value'].tolist()
-        names1 = input_params['Name1'].tolist()
-        values1 = input_params['Value1'].tolist()
-        #make a dictionary of all the things for better readability of code
-        input_params = {names[i]: values[i] for i in range(len(names))}
-        input_params1 = {names1[i]: values1[i] for i in range(len(names1))}
-        input_params.update(input_params1)
-        print(input_params)
-        #something to read the metadata
-        dh=CellTrack_utils.data_handler()
-        out_df = dh.return_metadata_df(metadata_path) 
-        #something to run the batch analysis
-        image_analyzer = analysisNOGUI.ImageAnalyzer(input_params)
-        batchanalysis = BatchAnalyzerNOGUI.BatchAnalysis(input_params, image_analyzer)
-        batchanalysis.ON_APPLYBUTTON(out_df)
-        #testing with just nuc segmentor
-        # nuc=analysisNOGUI.ImageAnalyzer(input_params)
-        # img = Image.open('sample.tif')
-        # img_arr = np.array(img)
-        # print(img_arr)
-        # ImageForNucMask = img_arr
-        # normalized_nuc_img = cv2.normalize(ImageForNucMask, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-        # print(normalized_nuc_img)
-        # nuc_bndry, nuc_mask = nuc.nuclei_segmenter(input_img=normalized_nuc_img)
-        # print("boundary and stuff")
-        # img = Image.fromarray(nuc_bndry)
-        # img.save("boundary.tif")
-        # print(nuc_bndry,nuc_mask) 
-        # print("done")
-    else:
-        gui_or_no = input("Please input either y or n:")
-        is_gui(gui_or_no)
+
 if __name__ == "__main__":
     # gui_or_no = input("Would you like to use the GUI? (y/n)")
     # is_gui(gui_or_no)
@@ -570,28 +519,7 @@ if __name__ == "__main__":
             # sys.exit(app.exec_())
     elif len(sys.argv) == 2:
         is_gui = False
-        #metadata_path = "/data/tranne/AssayPlate_PerkinElmer_CellCarrier-384"#input("Input path to metadata file:")
-        #data_path = "/data/tranne/hitips-nicole"#input("Input path to input file:")
-        #filename = "input_template.xlsx"#input("Input parameter file name:")
-        #save path is in batchanalyzer- probably make a way to change the paths and the file names, etc
-        #filepath = os.path.join(data_path,filename)
-        # input_params = pd.read_excel(sys.argv[1])
-        # names = input_params['Name'].tolist()
-        # values = input_params['Value'].tolist()
-        # names1 = input_params['Name1'].tolist()
-        # values1 = input_params['Value1'].tolist()
-        # #make a dictionary of all the things for better readability of code
-        # input_params = {names[i]: values[i] for i in range(len(names))}
-        # input_params1 = {names1[i]: values1[i] for i in range(len(names1))}
-        # #check for ints that were read as strings
-        # for possible_num in input_params1:
-        #     if np.isnan(possible_num):
-        #         del input_params1[possible_num]
-        #     if np.isnan(input_params1[possible_num]):
-        #         del input_params1[possible_num]
-        #     if input_params1[possible_num].isnumeric():
-        #         input_params1[possible_num] = int(input_params1[possible_num])
-        # input_params.update(input_params1)
+        #standard analysis
         input_params = pd.read_csv(sys.argv[1],keep_default_na=False)
         values = input_params['Value'].tolist()
         names = input_params['Name'].tolist()
@@ -603,7 +531,7 @@ if __name__ == "__main__":
             elif values[i] == "FALSE" or values[i]=="False":
                 values[i] = False
         input_params = {names[i]: values[i] for i in range(len(names))}
-        print(input_params)
+        #print(input_params)
         #something to read the metadata
         dh=CellTrack_utils.data_handler()
         out_df = dh.return_metadata_df(input_params["metadata_path"]) 
@@ -611,20 +539,37 @@ if __name__ == "__main__":
         image_analyzer = analysisNOGUI.ImageAnalyzer(is_gui,input_params=input_params)
         batchanalysis = BatchAnalyzerNOGUI.BatchAnalysis(is_gui, input_params = input_params, image_analyzer=image_analyzer)
         batchanalysis.ON_APPLYBUTTON(out_df)
-        #testing with just nuc segmentor
-        # nuc=analysisNOGUI.ImageAnalyzer(input_params)
-        # img = Image.open('sample.tif')
-        # img_arr = np.array(img)
-        # print(img_arr)
-        # ImageForNucMask = img_arr
-        # normalized_nuc_img = cv2.normalize(ImageForNucMask, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-        # print(normalized_nuc_img)
-        # nuc_bndry, nuc_mask = nuc.nuclei_segmenter(input_img=normalized_nuc_img)
-        # print("boundary and stuff")
-        # img = Image.fromarray(nuc_bndry)
-        # img.save("boundary.tif")
-        # print(nuc_bndry,nuc_mask) 
-        # print("done")
+    elif len(sys.argv) == 3:
+        #"multi" as the third param
+        is_gui = False
+        #first, a csv containing the paths to the folders and paths to the input files
+        plate_order = pd.read_csv(sys.argv[1])
+        plate_queue = plate_order[["Plate","Input_Params"]].to_numpy()
+        #for each element of the list, call all the stuff on it on it
+        for i in plate_queue:
+            plate = i[0]
+            print("Starting " + plate +":")
+            input_template = i[1]
+            input_params = pd.read_csv(input_template,keep_default_na=False)
+            values = input_params['Value'].tolist()
+            names = input_params['Name'].tolist()
+            for i in range(len(values)):
+                if values[i].isnumeric():
+                    values[i] = int(values[i])
+                elif values[i] == "TRUE" or values[i] =="True":
+                    values[i] = True
+                elif values[i] == "FALSE" or values[i]=="False":
+                    values[i] = False
+            input_params = {names[i]: values[i] for i in range(len(names))}
+            #print(input_params)
+            #something to read the metadata
+            dh=CellTrack_utils.data_handler()
+            out_df = dh.return_metadata_df(input_params["metadata_path"]) 
+            #something to run the batch analysis
+            image_analyzer = analysisNOGUI.ImageAnalyzer(is_gui,input_params=input_params)
+            batchanalysis = BatchAnalyzerNOGUI.BatchAnalysis(is_gui, input_params = input_params, image_analyzer=image_analyzer)
+            batchanalysis.ON_APPLYBUTTON(out_df)
+            print("Finished " + plate + ".")
     else:
-        print("Please input something correct B)")
+        print("Please input HiTIPSNOGUI.py for the GUI, HiTIPSNOGUI.py and input path for a single plate, and HiTIPSNOGUI.py + input path + multi for multiple plates.")
         exit
