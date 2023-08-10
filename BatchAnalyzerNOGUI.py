@@ -132,6 +132,8 @@ class BatchAnalysis(object):
         fovs = np.unique(np.asarray(self.Meta_Data_df['field_index'], dtype=int))
 #         fovs = np.array([2])
         time_points = np.unique(np.asarray(self.Meta_Data_df['time_point'], dtype=int))
+        #used for progress bars later 
+        #CHANGED
         self.masks = len(columns)*len(rows)*len(fovs)*len(time_points)
         actionindices = np.unique(np.asarray(self.Meta_Data_df['action_index'], dtype=int))
         
@@ -202,8 +204,8 @@ class BatchAnalysis(object):
         
         if self.ch1_spot_df_list.__len__() > 0:
             self.ch1_spot_df = pd.concat(self.ch1_spot_df_list)
-            
-            if self.gui_params.NucInfoChkBox_check_status == True:
+            #CHANGED
+            if self.gui_params.SpotsLocation_check_status == True:
                 coordinates_method = self.gui_params.SpotLocationCbox_currentText
                 xlsx_name = ['Ch1_Spot_Locations_' + coordinates_method + r'.csv']
                 xlsx_full_name = os.path.join(xlsx_output_folder, xlsx_name[0])
@@ -303,12 +305,12 @@ class BatchAnalysis(object):
         
         
         if self.gui_params.SpotsDistance_check_status == True:
-            print("Starting Spot Distance calculation")
+            print("\nStarting Spot Distance calculation")
             columns = np.unique(np.asarray(self.cell_df['column'], dtype=int))
             rows = np.unique(np.asarray(self.cell_df['row'], dtype=int))
             self.distances = len(rows)*len(columns)
             Parallel(n_jobs=jobs_number, prefer="threads")(delayed(self.Calculate_Spot_Distances)(row, col) for row in rows for col in columns)
-            print("Completed Spot Distance Tracking")
+            print("\nCompleted Spot Distance Tracking")
         if self.gui_params.Cell_Tracking_check_status == True:
             
             cell_tracking_folder = os.path.join(self.output_folder, 'cell_tracking')
@@ -350,7 +352,7 @@ class BatchAnalysis(object):
                         spot_channels = spots_loc['channel'].unique()
                         
                     for fov in fovs:
-                        
+                        print(fovs)
                         spot_images = {}
                         spot_dict_stack={}
                         for sp_ch in spot_channels:
@@ -379,11 +381,17 @@ class BatchAnalysis(object):
                             
                             nuc_mask_output_folder = os.path.join(self.output_folder, 'nuclei_masks')
                             mask_full_name = os.path.join(nuc_mask_output_folder, mask_file_name[0])
-                            mask_image = imread(mask_full_name, 0)
+                            #print(mask_full_name)
+                            mask_image = imread(mask_full_name,0)
+                            #print(mask_image)
                             lbl, ncc = label(mask_image)
+                            #print("lbl")
+                            #print(lbl)
                             masks.append(mask_image)
                             lbl_imgs.append(lbl)
+                        print("label iimages")
                         label_stack=np.stack(lbl_imgs,axis=0)
+                        print(label_stack)
                         masks_stack=np.stack(masks,axis=0)
                         t_stack_nuc=np.stack(nuc_imgs,axis=0)
                         for sp_ch in spot_channels:
@@ -401,11 +409,11 @@ class BatchAnalysis(object):
                             
                         #### run nuclei tracking algorithm based the selected method
                         if self.gui_params.NucTrackingMethod_currentText == "Bayesian":
-                            print("Starting Bayesian cell tracking")
+                            print("\nStarting Bayesian cell tracking")
                             tracks_pd = self.RUN_BTRACK(label_stack, self.gui_params)
                         
                         if self.gui_params.NucTrackingMethod_currentText == "DeepCell":
-                            print("Starting Deepcell cell tracking")
+                            print("\nStarting Deepcell cell tracking")
                             tracks_pd = self.deepcell_tracking(t_stack_nuc,label_stack,self.gui_params)
                         
                         ##########save whole field track images
@@ -850,7 +858,7 @@ class BatchAnalysis(object):
         seconds2 = time.time()
         
         diff=seconds2-seconds1
-        print('Total Processing Time (Minutes):',diff/60)
+        print('\nTotal Processing Time (Minutes):',diff/60)
     def save_nuc_patches(self,im1,im2):
         
         fig, ax = plt.subplots(1, 2, figsize=(12, 6))
@@ -1526,7 +1534,7 @@ class BatchAnalysis(object):
 
     
     def RUN_BTRACK(self,label_stack, gui_params):
-        
+        print(label_stack)
         obj_from_generator = btrack.utils.segmentation_to_objects(label_stack, properties = ('bbox','area',
                                                                                     'perimeter',
                                                                                       'major_axis_length','orientation',
@@ -1537,18 +1545,19 @@ class BatchAnalysis(object):
                 # configure the tracker using a config file
             tracker.configure_from_file('./BayesianTracker/models/cell_config.json') #CHANGED
             tracker.max_search_radius = gui_params.NucSearchRadiusSpinbox_current_value
-
+            print("step 1")
             # append the objects to be tracked
             tracker.append(obj_from_generator)
-
+            print("step 2")
             # set the volume
-        #     tracker.volume=((0, 1200), (0, 1200), (-1e5, 64.))
-
+            tracker.volume=((0, 1200), (0, 1200), (-1e5, 64.))
+            
             # track them (in interactive mode)
             tracker.track_interactive(step_size=100)
-
+            print("step 3")
             # generate hypotheses and run the global optimizer
             tracker.optimize()
+            print("step 4")
 
 #                             tracker.export(os.path.join('/data2/cell_tracking/','tracking.h5'), obj_type='obj_type_1')
 
@@ -1556,7 +1565,7 @@ class BatchAnalysis(object):
 #                             data, properties, graph = tracker.to_napari(ndim=2)
 
             tracks = tracker.tracks
-
+            print("step 5")
         tracks_pd = pd.DataFrame()
         for i in range(len(tracks)):
             tracks_pd = tracks_pd.append(pd.DataFrame(tracks[i].to_dict()))
