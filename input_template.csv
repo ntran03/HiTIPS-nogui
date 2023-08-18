@@ -1,5 +1,6 @@
 ﻿Name,Value,,,
-output_dir,/data/tranne/hitips-nicole/results1,,,
+output_dir,/data/tranne/hitips-nicole/results,,,
+metadata_name,MeasurementData.mlf,,,
 metadata_path,/data/tranne/AssayPlate_PerkinElmer_CellCarrier-384,,,
 nuc_info,TRUE,,,
 spots_location,TRUE,,,
