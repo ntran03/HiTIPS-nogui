@@ -33,6 +33,8 @@ class ImageAnalyzer(object):
 #     with open("/data2/test_images/for_training/all_trained_models/NeuralNet_deep.pickle", 'rb') as handle: ### neural netowork model (8,16,32,64,32,16,8)
 #         model1 = pickle.load(handle)
     #edited
+    #made all parameters optional, for gui init only use gui params, for nogui init use input_params dict
+    #analysisgui and inoutresourcegui are instances of the classes that are instantiated in hitips/batchanalyzer
     def __init__(self, is_gui, input_params=None, analysisgui=None, inout_resource_gui=None):
         #all from the input excel file->dict
         if is_gui == False:
@@ -47,6 +49,7 @@ class ImageAnalyzer(object):
         
     
     #edited
+    #the only major edits here are how the params are called- all come from the gui_params class instantiation
     def nuclei_segmenter(self, input_img, pixpermic=None):
         
         #self.AnalysisGui.nuclei_detection_method.currentText()444
@@ -110,6 +113,7 @@ class ImageAnalyzer(object):
         return boundary, mask
 
 #edited
+#I moved the deepcell import to the top
     def deepcell_segmenter(self, input_img, cell_dia=None):
         
         app = NuclearSegmentation()
@@ -127,6 +131,7 @@ class ImageAnalyzer(object):
 
         return boundary, mask
 #edited
+#only edits to gui_params
     def cellpose_segmenter(self, input_img, use_GPU, cell_dia=None):
         
         if self.gui_params.NucRemoveBoundaryCheckBox == True: #remove boundary
@@ -169,7 +174,7 @@ class ImageAnalyzer(object):
         boundary= resized_bound.astype('uint8')
 
         return boundary, mask
-#edited
+
     def segmenter_function(self, input_img, cell_size=None, first_threshold=None, second_threshold=None):
     
         img_uint8 = cv2.copyMakeBorder(input_img,5,5,5,5,cv2.BORDER_CONSTANT,value=0)
@@ -243,7 +248,7 @@ class ImageAnalyzer(object):
         mask = (255*mask).astype(np.uint8)
 
         return boundary, mask
-#edited
+
     def watershed_scikit(self, input_img, cell_size=None, first_threshold=None, second_threshold=None):
         
         img_uint8 = cv2.copyMakeBorder(input_img,5,5,5,5,cv2.BORDER_CONSTANT,value=0)
@@ -307,8 +312,14 @@ class ImageAnalyzer(object):
         max_project = z_stack.max(axis=2)
         
         return max_project
-#tentatively done
+#edited
+#changed the way it checks the methods to comparing to strings
+#ex. used to be if str(params_to_pass[0]) == '0': and I changed to if str(params_to_pass[0]) == "LOG":
+#this is because with the GUI, lists of the possible param values are created with the widget, but in headless
+#we need to compare directly
     def SpotDetector(self, input_image_raw, nuclei_image, spot_channel):
+        #no need to update spot analysis params in nogui ver, removed
+
         if self.gui_params.NucRemoveBoundaryCheckBox=='All':
             
             params_to_pass= self.spot_params_dict['Ch1']
@@ -355,12 +366,12 @@ class ImageAnalyzer(object):
         input_image1 = cv2.normalize(input_image1, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)    
 ########################################
         sig=int(params_to_pass[3])
-        if str(params_to_pass[0]) == "LOG":
+        if str(params_to_pass[0]) == "LOG": #0
             log_result = ndimage.gaussian_laplace(input_image1, sigma=sig)
             if self.gui_params.SpotPerChSpinBox>1:
                 log_result =  resize(log_result, input_image_raw.shape, anti_aliasing=False, preserve_range=True)
 
-            if str(params_to_pass[1]) == "Auto":
+            if str(params_to_pass[1]) == "Auto": 
 
                 ret_log, thresh_log = cv2.threshold(log_result.astype("uint8"),0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
                 bin_img_log = (1-thresh_log/255).astype('bool')
@@ -369,7 +380,7 @@ class ImageAnalyzer(object):
                     struct = ndimage.generate_binary_structure(2, 2)
                     bin_img_log = ndimage.binary_dilation(bin_img_log, structure=struct).astype(filled.dtype)
 
-            if str(params_to_pass[1]) == "Manual":
+            if str(params_to_pass[1]) == "Manual": 
                 
                 manual_threshold = np.ceil(params_to_pass[2]*2.55).astype(int)
                 thresh_log = log_result.astype("uint8") > manual_threshold
@@ -384,7 +395,7 @@ class ImageAnalyzer(object):
             final_spots = np.multiply(spot_openned_log,filled)
             spots_df, bin_img_log, labeled_spots = self.spots_information(final_spots, input_image_raw)   
             
-        if str(params_to_pass[0]) == "Laplacian of Gaussian":
+        if str(params_to_pass[0]) == "Laplacian of Gaussian": #1
             
             result_gaussian = ndimage.gaussian_filter(input_image1, sigma=sig)
             
@@ -545,6 +556,7 @@ class ImageAnalyzer(object):
         return spot_boundary
     
     #EDITED
+    #changed to grab from gui_params again
     def INITIALIZE_SPOT_ANALYSIS_PARAMS(self):
 
         self.spot_params_dict={
