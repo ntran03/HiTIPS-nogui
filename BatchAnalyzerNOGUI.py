@@ -1,6 +1,9 @@
-#my stuff
+#new imports
 import analysisNOGUI
+import metadata_trimmer
 import parameters_class
+from time import sleep
+from random import random
 import threading
 import sys
 #all else
@@ -19,7 +22,7 @@ from PIL import Image, ImageQt
 from scipy.ndimage import label, distance_transform_edt
 import multiprocessing
 from joblib import Parallel, delayed
-from multiprocessing import Pool, Process, Manager, Value
+from multiprocessing import Pool, Process, Manager, Value, Lock
 #from GUI_parameters import Gui_Params
 import btrack
 import imageio
@@ -40,6 +43,8 @@ from sklearn.metrics import silhouette_samples, silhouette_score
 from skimage.morphology import disk, binary_closing, skeletonize, binary_opening, binary_erosion, white_tophat
 
 WELL_PLATE_ROWS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P"]
+
+#class for making a process-safe counter
 class SafeCounter():
     # constructor
     def __init__(self):
@@ -66,6 +71,7 @@ class BatchAnalysis(object):
     def __init__(self, is_gui, input_params = None, analysisgui = None, image_analyzer = None, inout_resource_gui = None, displaygui = None, ImDisplay = None):
         self.is_gui = is_gui
         if is_gui == False:
+            #intiialize nogui version
             self.ch1_spot_df, self.ch2_spot_df, self.ch3_spot_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
             self.ch4_spot_df, self.ch5_spot_df, self.cell_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
             self.df_checker = pd.DataFrame()
@@ -74,12 +80,19 @@ class BatchAnalysis(object):
             self.experiment_name = []
             self.output_prefix = []
             self.input_params = input_params
+            #initialize the gui_params class
             self.gui_params = parameters_class.Gui_Params(is_gui, input_params=input_params)
+            #initialize with my analysisNOGUI class
             self.ImageAnalyzer = image_analyzer
-            self.counter = SafeCounter()
-            self.distance_counter = SafeCounter()
+            #initialize counters
+            self.counter = SafeCounter() #masks
+            self.distance_counter = SafeCounter() #spot distances
+            #stuff for the progress saver
+            self.trimmer = metadata_trimmer.metadata_trimmer(input_params["metadata_path"], input_params["metadata_name"])
+            self.lock = Lock()
             
         else:
+            #initialize gui version
             self.inout_resource_gui = inout_resource_gui
             self.AnalysisGui = analysisgui
             self.displaygui = displaygui
@@ -92,14 +105,15 @@ class BatchAnalysis(object):
             self.spot_distances = {}
             self.experiment_name = []
             self.output_prefix = []
+            #initialize the gui_params class
             self.gui_params = parameters_class.Gui_Params(is_gui, analysisgui=self.AnalysisGui, inout_resource_gui=self.inout_resource_gui)
 
-    #before I do this, I need to integrate analysisgui and analysisnogui to account for all the other functions
     def ON_APPLYBUTTON(self, Meta_Data_df):
         
         
         seconds1 = time.time()
         #set output directory
+        #if it's the headless version, we need to pull the output dir from the gui_params class
         if self.is_gui == False:
             self.output_dir = self.gui_params.output_dir
             if os.path.isdir(self.output_dir) == False:
@@ -109,7 +123,7 @@ class BatchAnalysis(object):
             self.experiment_name = path_list[path_list.__len__()-1]
             self.output_prefix  = path_list[path_list.__len__()-1]
             self.output_folder = os.path.join(self.output_dir,self.experiment_name)
-
+        #if it's the gui version, just call the same thing as the original
         else:
             while self.inout_resource_gui.Output_dir ==[]:
                 self.inout_resource_gui.OUTPUT_FOLDER_LOADBTN()
@@ -118,6 +132,8 @@ class BatchAnalysis(object):
             self.experiment_name = path_list[path_list.__len__()-2]
             self.output_prefix  = path_list[path_list.__len__()-1]
             self.output_folder = os.path.join(self.inout_resource_gui.Output_dir,self.experiment_name)
+        
+        #after we get the path, gui or not, we make sure it exists
         if os.path.isdir(self.output_folder) == False:
             os.mkdir(self.output_folder) 
             
@@ -132,7 +148,7 @@ class BatchAnalysis(object):
         fovs = np.unique(np.asarray(self.Meta_Data_df['field_index'], dtype=int))
 #         fovs = np.array([2])
         time_points = np.unique(np.asarray(self.Meta_Data_df['time_point'], dtype=int))
-        #used for progress bars later 
+        #used for mask progress bars later 
         #CHANGED
         self.masks = len(columns)*len(rows)*len(fovs)*len(time_points)
         actionindices = np.unique(np.asarray(self.Meta_Data_df['action_index'], dtype=int))
@@ -167,19 +183,30 @@ class BatchAnalysis(object):
             processes=[]
             for ind1 in data_ind:
                 process_args= np.array(func_args[ind1,:],dtype=int)
-                processes.append(Process(target=self.BATCH_ANALYZER, args=process_args))
+                if self.is_gui == False:
+                    #if it's the headless version and I want to have the resume from interrupt work
+                    #need to add a lock and a sleep timer to the args
+                    process_args = process_args.tolist()
+                    process_args.append(self.lock)
+                    process_args.append(random())
+                    #CHANGED
+                    processes.append(Process(target=self.BATCH_ANALYZER, args=process_args))
+                else:
+                    processes.append(Process(target=self.BATCH_ANALYZER, args=process_args))
+
             # kick them off 
             for process in processes:
                 process.start()
             # now wait for them to finish
             for process in processes:
                 process.join()
-            
+        #if it all ran well, delete the temp file
+        self.trimmer.del_temp()    
         xlsx_output_folder = os.path.join(self.output_folder, 'whole_plate_results')
         if os.path.isdir(xlsx_output_folder) == False:
             os.mkdir(xlsx_output_folder) 
-        #change instances of guiparams to the input params
-                                                                                               
+        
+        #get spot locations for each channel                                                                                       
         if self.gui_params.NucInfoChkBox_check_status == True: #nucinfochkbox
             
             self.cell_df = pd.concat(self.cell_pd_list)
@@ -204,8 +231,8 @@ class BatchAnalysis(object):
         
         if self.ch1_spot_df_list.__len__() > 0:
             self.ch1_spot_df = pd.concat(self.ch1_spot_df_list)
-            #CHANGED
-            if self.gui_params.SpotsLocation_check_status == True:
+            #not sure if this should be NucInfoChkBox or SpotsLocation - nt
+            if self.gui_params.NucInfoChkBox_check_status == True:
                 coordinates_method = self.gui_params.SpotLocationCbox_currentText
                 xlsx_name = ['Ch1_Spot_Locations_' + coordinates_method + r'.csv']
                 xlsx_full_name = os.path.join(xlsx_output_folder, xlsx_name[0])
@@ -303,7 +330,8 @@ class BatchAnalysis(object):
                             spot_loc_df.to_csv(path_or_buf=spot_loc_well_csv_full_name, encoding='utf8')
         
         
-        
+        #a resume from interrupt here would have to be threadsafe, not process-safe and so would be different than the nuc mask one
+        #this section just checks what kinds of results we want to have
         if self.gui_params.SpotsDistance_check_status == True:
             print("\nStarting Spot Distance calculation")
             columns = np.unique(np.asarray(self.cell_df['column'], dtype=int))
@@ -389,9 +417,9 @@ class BatchAnalysis(object):
                             #print(lbl)
                             masks.append(mask_image)
                             lbl_imgs.append(lbl)
-                        print("label iimages")
+                        
                         label_stack=np.stack(lbl_imgs,axis=0)
-                        print(label_stack)
+                        
                         masks_stack=np.stack(masks,axis=0)
                         t_stack_nuc=np.stack(nuc_imgs,axis=0)
                         for sp_ch in spot_channels:
@@ -877,11 +905,12 @@ class BatchAnalysis(object):
         return image
 
 
-    
-    def BATCH_ANALYZER(self, col,row,fov,t): 
+    #the main nuclear mask function
+    #calls the nuclear mask maker on each image at a given col/row/time/fov
+    def BATCH_ANALYZER(self, col,row,fov,t, lock=None, value=None): 
         ai = 1
         self.counter.increment()    
-        #print(self.counter.value())        
+        #process safe counter, will update before the actual images finish (ex. will say 16/50, but only the first 8 are actually done and the other 8 are still in progress)       
         progress_message = "Progress: %d%% [%d / %d] masks" % (self.counter.value() / self.masks * 100, self.counter.value(), self.masks)
         # Don't use print() as it will print in new line every time.
         sys.stdout.write("\r" + progress_message)
@@ -937,15 +966,23 @@ class BatchAnalysis(object):
 #                         cv2.imwrite(mask_full_name,nuc_mask)
 
                     imwrite(mask_full_name,nuc_mask)
+                    #CHANGED
+                    #resume from interrupt trimmer that trims the related lines from the metadata file
+                    #only runs for the headless version
+                    if self.is_gui == False:
+                        with lock:
+                            self.trimmer.trim_metadata(col, row, t, fov)
+                            #print(f'> sleeping for {value}')
+                            sleep(value)
                     
                      
 
-
+            #right now, this shouldn't run ever unless there's a bug
             else:
 
                 nuc_bndry, nuc_mask = self.Z_STACK_NUC_SEGMENTER(ImageForNucMask)
                 label_nuc_stack = self.Z_STACK_NUC_LABLER(ImageForLabel)
-    #previous comment out
+    
             ch1_xyz, ch1_xyz_3D, ch1_final_spots, ch2_xyz, ch2_xyz_3D, ch2_final_spots, ch3_xyz, ch3_xyz_3D, ch3_final_spots, ch4_xyz, ch4_xyz_3D, ch4_final_spots, ch5_xyz, ch5_xyz_3D, ch5_final_spots  = self.IMAGE_FOR_SPOT_DETECTION( ImageForNucMask)
 
             if self.gui_params.NucMaxZprojectCheckBox_status_check == True:
@@ -1215,11 +1252,11 @@ class BatchAnalysis(object):
 #                                                                   (self.cell_pd_list[df_index]['time_point']==t)&
 #                                                                   (self.cell_pd_list[df_index]['action_index']==ai)].index[0]
 #                                     self.cell_pd_list[df_index].loc[row_index,column_name]=num_spots
-    #prevuious comment out
 
     def Calculate_Spot_Distances(self, row, col):
         self.distance_counter.increment()    
-        #print(self.counter.value())        
+        #print(self.counter.value())
+        # #process safe counter for the spot distances        
         progress_message = "Progress: %d%% [%d / %d] files" % (self.distance_counter.value() / self.distances * 100, self.distance_counter.value(), self.distances)
         # Don't use print() as it will print in new line every time.
         sys.stdout.write("\r" + progress_message)
@@ -1573,7 +1610,8 @@ class BatchAnalysis(object):
         tracks_pd = tracks_pd[tracks_pd['dummy']==False]
         return tracks_pd
     
-    def deepcell_tracking(self,t_stack_nuc,masks_stack, input_params):
+    #removed gui_params from the args because it was not used at all
+    def deepcell_tracking(self,t_stack_nuc,masks_stack):
     
         tracker = CellTracking()
         tracked_data = tracker.track(np.copy(np.expand_dims(t_stack_nuc, axis=-1)), np.copy(np.expand_dims(masks_stack, axis=-1)))
