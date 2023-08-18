@@ -1,6 +1,6 @@
 
 class Gui_Params(object):
-    
+    #gui args are only used if is_gui is true
     def __init__(self, is_gui, input_params=None, analysisgui=None, inout_resource_gui=None):
         self.is_gui = is_gui
         if is_gui == False:
@@ -17,6 +17,7 @@ class Gui_Params(object):
             self.SpotCh3CheckBox_status_check = input_params["ch3_spot"] #self.AnalysisGui.SpotCh3CheckBox.isChecked()
             self.SpotCh4CheckBox_status_check = input_params["ch4_spot"] #self.AnalysisGui.SpotCh4CheckBox.isChecked()
             self.SpotCh5CheckBox_status_check = input_params["ch5_spot"] #self.AnalysisGui.SpotCh5CheckBox.isChecked()
+            #note that this is a little different from the gui version, mainly because I'm just yanking the channel no. from the string channel
             self.NucleiChannel_index = str(input_params["nuclei_channel"])[-1] #self.AnalysisGui.NucleiChannel.currentIndex()
             self.NumCPUsSpinBox_value = 8#self.inout_resource_gui.NumCPUsSpinBox.value()
             self.Cell_Tracking_check_status = input_params["cell_tracking"] #self.AnalysisGui.Cell_Tracking.isChecked()
