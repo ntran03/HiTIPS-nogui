@@ -18,10 +18,9 @@ class data_handler(object):
     def init(self):
 
         print('Initialized')
-
-    def return_metadata_df(self, data_path):
-        print("started")
-        metadatafilename = os.path.join(data_path,'MeasurementData.mlf')
+    #needs both the path to the metadata file and the name of the file
+    def return_metadata_df(self, data_path, metafilename):
+        metadatafilename = os.path.join(data_path, metafilename)
         print(metadatafilename)
         mydoc = minidom.parse(metadatafilename)
         PATH_TO_FILES = os.path.split(metadatafilename)[0]
