@@ -503,10 +503,12 @@ class ControlPanel(QWidget):
         
 
 if __name__ == "__main__":
-    # gui_or_no = input("Would you like to use the GUI? (y/n)")
-    # is_gui(gui_or_no)
+    #  checks number of arguments in the terminal - with just HiTIPSNOGUI.py, calls GUI version
+    # with two arguments, takes the second argument as the path to the input file
+    # with three arguments, takes the second as the path to the csv with the different input files to run
     if len(sys.argv) == 1:
         is_gui = True
+        #gui opens
         currentExitCode = ControlPanel.EXIT_CODE_REBOOT
         while currentExitCode == ControlPanel.EXIT_CODE_REBOOT:
             app = QtWidgets.QApplication(sys.argv)
@@ -523,6 +525,7 @@ if __name__ == "__main__":
         input_params = pd.read_csv(sys.argv[1],keep_default_na=False)
         values = input_params['Value'].tolist()
         names = input_params['Name'].tolist()
+        #corrects type errors
         for i in range(len(values)):
             if values[i].isnumeric():
                 values[i] = int(values[i])
@@ -531,21 +534,20 @@ if __name__ == "__main__":
             elif values[i] == "FALSE" or values[i]=="False":
                 values[i] = False
         input_params = {names[i]: values[i] for i in range(len(names))}
-        #print(input_params)
         #something to read the metadata
         dh=CellTrack_utils.data_handler()
-        out_df = dh.return_metadata_df(input_params["metadata_path"]) 
+        out_df = dh.return_metadata_df(input_params["metadata_path"], input_params["metadata_name"]) 
         #something to run the batch analysis
         image_analyzer = analysisNOGUI.ImageAnalyzer(is_gui,input_params=input_params)
         batchanalysis = BatchAnalyzerNOGUI.BatchAnalysis(is_gui, input_params = input_params, image_analyzer=image_analyzer)
         batchanalysis.ON_APPLYBUTTON(out_df)
     elif len(sys.argv) == 3:
-        #"multi" as the third param
+        #"multi" as the third param (multi analysis)
         is_gui = False
         #first, a csv containing the paths to the folders and paths to the input files
         plate_order = pd.read_csv(sys.argv[1])
         plate_queue = plate_order[["Plate","Input_Params"]].to_numpy()
-        #for each element of the list, call all the stuff on it on it
+        #for plate in the csv, read the input file, load metadata, and 
         for i in plate_queue:
             plate = i[0]
             print("Starting " + plate +":")
@@ -553,6 +555,7 @@ if __name__ == "__main__":
             input_params = pd.read_csv(input_template,keep_default_na=False)
             values = input_params['Value'].tolist()
             names = input_params['Name'].tolist()
+            #fixing type errors in the input file
             for i in range(len(values)):
                 if values[i].isnumeric():
                     values[i] = int(values[i])
@@ -564,7 +567,7 @@ if __name__ == "__main__":
             #print(input_params)
             #something to read the metadata
             dh=CellTrack_utils.data_handler()
-            out_df = dh.return_metadata_df(input_params["metadata_path"]) 
+            out_df = dh.return_metadata_df(input_params["metadata_path"], input_params["metadata_name"]) 
             #something to run the batch analysis
             image_analyzer = analysisNOGUI.ImageAnalyzer(is_gui,input_params=input_params)
             batchanalysis = BatchAnalyzerNOGUI.BatchAnalysis(is_gui, input_params = input_params, image_analyzer=image_analyzer)
